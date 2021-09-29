@@ -6,37 +6,14 @@ import threading,time
 
 pieceActivated=[None,None]
 threads=[]
-
-class GradientFrame(Canvas):
-    '''A gradient frame which uses a canvas to draw the background'''
-    def __init__(self, parent, color1="red", color2="black", **kwargs):
-        Canvas.__init__(self, parent, **kwargs)
-        self._color1 = color1
-        self._color2 = color2
-        self.bind("<Configure>", self._draw_gradient)
-
-    def _draw_gradient(self, event=None):
-        '''Draw the gradient'''
-        self.delete("gradient")
-        width = self.winfo_width()
-        height = self.winfo_height()
-        limit = width
-        (r1,g1,b1) = self.winfo_rgb(self._color1)
-        (r2,g2,b2) = self.winfo_rgb(self._color2)
-        r_ratio = float(r2-r1) / limit
-        g_ratio = float(g2-g1) / limit
-        b_ratio = float(b2-b1) / limit
-
-        for i in range(limit):
-            nr = int(r1 + (r_ratio * i))
-            ng = int(g1 + (g_ratio * i))
-            nb = int(b1 + (b_ratio * i))
-            color = "#%4.4x%4.4x%4.4x" % (nr,ng,nb)
-            self.create_line(i,0,i,height, tags=("gradient",), fill=color)
-        self.lower("gradient")
+stopThreads=False
 
 class Piece():
+    
+    """ Piece Class. Each individual piece on the board is made from one of these """
+    
     def __init__(self,color,num,id,wildcard=False):
+        """ Default constructor. Defines all piece attributes """
         self.color=color
         self.num=num
         self.id=id
@@ -50,9 +27,11 @@ class Piece():
             self.wildCard=False
         
     def __repr__(self):
+        """ Defines what is outputted on print( <Piece object> ) """
         return f"<Piece {self.id} {self.getCardCode()}>\n"
     
     def getCardCode(self):
+        """ Returns the piece code in the format <color>:<number> """
         if self.wildCard:
             return f"X:00"
 
@@ -62,12 +41,15 @@ class Piece():
         return f"{self.color}:{self.num}"
 
     def getCardUniqueID(self):
+        """ Returns the piece id """
         return self.id
 
     def defineTkPiece(self,x):
+        """ Links the tkinter piece to the object. Called when all pieces are defined on the board """
         self.tkPiece=x
 
     def possibleAdjacentPieces(self):
+        """ Fetches all pieces that can be placed next to this one. Does not take into account any other existing pieces """
         l=[]
         x=self.getCardCode()
         
@@ -89,16 +71,25 @@ class Piece():
         return l
         
 class Player():
+    
+    """ Player class. """
+    
     def __init__(self,name=""):
+        """ Default Constructor. Defines all attributes of the player """
         self.hand=[]
         self.name=name
 
     def draw(self,cards):
+        """ Adds a card/multiple cards to the hand. In context, they will come from the draw pile """
         for card in cards:
             self.hand.append(card)
 
 class Game():
+    
+    """ Main game class. Contains all tkinter code"""
+    
     def __init__(self,players=[]):
+        """ Default constructor. Creates all attributes and runs the game """
         self.drawPile=self.getStartingDeck()
         shuffle(self.drawPile)
 
@@ -121,9 +112,23 @@ class Game():
 
         self.gameScreen()
 
+        self.root.protocol("WM_DELETE_WINDOW", self.onClose) # stop threads from throwing exceptions on close
+
         self.root.mainloop()
 
+    def onClose(self):
+        """ Handles the window being closed via window manager. Used to stop threads throwing exceptions """
+        global threads, stopThreads
+        
+        stopThreads=True
+        for thread in threads:
+            thread.join()
+
+        self.root.destroy()
+        raise SystemExit
+            
     def initializeTk(self):
+        """ Creates all tkinter variables including fonts and colors. Defines window attributes """
         self.root=Tk()
 
         self.fontPrimary="Lexend"
@@ -211,6 +216,7 @@ class Game():
         #self.root.attributes("-alpha",0.9)
 
     def gameScreen(self):
+        """ Creates screen shown when game is being played """
         title=self.createTitle()
         
         board=Frame(self.root,bg=self.bgcolor)
@@ -255,31 +261,26 @@ class Game():
                 l.grid(row=7,column=12)
 
     def createTitle(self):
+        """ Creates and returns the title text object """
         title=Label(self.root,text="Rummikub", font=self.titleFont,fg=self.colors["primary"]["normal"],bg=self.bgcolor)
         title.grid(row=0,column=0)
         return title
 
     def createPieceMoveArea(self,root,left=True):
-        c1=self.colors["gray"]["100"]
-        c2=self.colors["gray"]["100"]
-        
-        if left:
-            c1,c2 = c2,c1
-            
-        label=GradientFrame(
+        """ Creates and returns a widged dictating where a piece can be moved to. In context, run when a piece is selected """
+        label=Canvas(
             root,
-            c1,
-            c2,
             width=62,
             height=94,
             bd=0,
-            bg=self.bgcolor,
+            bg=self.colors["gray"]["100"],
         )
     
         return label
        
 
     def createPiecePlaceholder(self,root):
+        """ Creates and returns a widget containing nothing. In context, used to define the size of the grid, and all the positions in it """
         label=Label(
             root,
             font=self.captionFont,
@@ -294,10 +295,14 @@ class Game():
         return label
 
     def createPiece(self,root,piece):
+        """ Creates and returns a piece on the board. Contains commands that handle piece selection and movement. """
 
         def labelHilight(e,piece):
+            """ Handles a piece being selected """
 
             def movePiece(e,piece,self,pos):
+                """ Handles a piece being moved """
+                
                 global pieceActivated
 
                 for square in self.hilightedSquares:
@@ -311,12 +316,13 @@ class Game():
                 
                 l.grid(row=pos[1][0],column=pos[1][1])
 
+                for item in self.cardsOnBoard:
+                    if item[2] == piece[1]:
+                        self.cardsOnBoard.remove(item)
+
                 self.cardsOnBoard.append([pos[0],pos[1],piece[1]])
 
                 pieceActivated=[None,None]
-
-
-                # [ int representing set one or set 2, (row, column), piece object ]
             
             global pieceActivated
             
@@ -361,7 +367,7 @@ class Game():
                     if itera > 7:
                         s1Exhausted=True
                         itera=0
-                        
+
                     if (itera,pieceNum-1) not in set1:
                         possibleSquares.append([0,(itera,pieceNum-1)])
                         break
@@ -392,22 +398,29 @@ class Game():
             
 
         def onHover(e):
+            """ Handles a piece being hovered over """
             if pieceActivated[0]==e.widget:
                 return
             e.widget.config(bg=self.colors["gray"]["200"])
 
         def onHoverExit(e):
+            """ Handles a piece stopped being hovered over """
             if pieceActivated[0]==e.widget:
                 return
             e.widget.config(bg=self.colors["gray"]["100"])
 
         def jokerRotate(j):
+            """ Handles the joker's changing color effect """
+            global stopThreads
+            
             colors=[self.colors["primary"]["light"],self.colors["accent2"]["dark"],self.colors["accent1"]["dark"],self.colors["secondary"]["dark"]]
             i=0
             while True:
                 i=randint(0,3)
                 j.config(fg=colors[i])
                 time.sleep(0.1)
+                if stopThreads:
+                    break
 
         joker=False
        
@@ -450,6 +463,7 @@ class Game():
         
 
     def drawHand(self):
+        """ Draws a players hand from the draw pile """
         hand=[]
         for i in range(14):
             x=randint(0,len(self.drawPile)-1)
