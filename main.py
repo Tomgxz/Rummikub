@@ -18,6 +18,8 @@ class Piece():
         self.num=num
         self.id=id
         self.selected=False
+        self.stillInDeck=True
+        self.invalid=False
 
         self.tkPiece=None
 
@@ -223,9 +225,9 @@ class Game():
         board.grid(row=1,column=0)
         board.grid_propagate(1)
 
-        deck=Frame(board,bg=self.bgcolor)
-        deck.grid(row=0,column=0,pady=10,columnspan=2)
-        deck.columnconfigure(15, weight=1)
+        self.deck=Frame(board,bg=self.bgcolor)
+        self.deck.grid(row=0,column=0,pady=10,columnspan=2)
+        self.deck.columnconfigure(15, weight=1)
 
         self.set1=Frame(board,bg=self.bgcolor)
         self.set1.grid(row=1, column=0, pady=10,padx=10,sticky="W")
@@ -236,7 +238,7 @@ class Game():
         # create board spaces
 
         for i in range(13):
-            l=self.createPiecePlaceholder(deck)
+            l=self.createPiecePlaceholder(self.deck)
             l.grid(row=1,column=i,padx=2)
 
         for y in range(8):
@@ -251,7 +253,7 @@ class Game():
         
         i=0
         for piece in self.players[0].hand:
-            l=self.createPiece(deck,piece)
+            l=self.createPiece(self.deck,piece)
             piece.defineTkPiece(l)
             l.grid(row=1,column=i,padx=2)
             i+=1
@@ -295,7 +297,7 @@ class Game():
         return label
 
     def createPiece(self,root,piece):
-        """ Creates and returns a piece on the board. Contains commands that handle piece selection and movement. """
+        """ Creates and returns a piece on the board. Contains commands that handle piece selection and movement. Calls a command to check all pieces for invalid positions """
 
         def labelHilight(e,piece):
             """ Handles a piece being selected """
@@ -315,6 +317,8 @@ class Game():
                 l=self.createPiece(parent,piece[1])
                 
                 l.grid(row=pos[1][0],column=pos[1][1])
+
+                piece[1].stillInDeck=False
 
                 for item in self.cardsOnBoard:
                     if item[2] == piece[1]:
@@ -347,10 +351,6 @@ class Game():
 
             # [ int representing set one or set 2, (row, column), piece object ]    
             
-            filledSquares=[]
-            for item in self.cardsOnBoard:
-                filledSquares.append([item[0], item[1]])
-
             set1=[]
             set2=[]
 
@@ -361,27 +361,48 @@ class Game():
                     set2.append(item[1])
 
             s1Exhausted=False
-            
-            while possibleSquares==[]:
-                if not s1Exhausted:
-                    if itera > 7:
-                        s1Exhausted=True
-                        itera=0
 
-                    if (itera,pieceNum-1) not in set1:
-                        possibleSquares.append([0,(itera,pieceNum-1)])
-                        break
-                    
-                else:
-                    if itera >  7:
-                        break
-                    
-                    if (itera,pieceNum-1) not in set2:
-                        possibleSquares.append([1,(itera,pieceNum-1)])
-                        break
+            #[0, (0, 11), <Piece 11 B:12>
 
-                itera+=1
+            for item in self.cardsOnBoard:
+                if pieceActivated[1].getCardCode() in item[2].possibleAdjacentPieces():
+                    if item[1][1] > 1:
+                        possibleSquares.append([item[0], (item[1][0],item[1][1]-1)])
+                    if item[1][1] < 13:
+                        possibleSquares.append([item[0], (item[1][0],item[1][1]+1)])
+
+            if len(self.cardsOnBoard) >= -1:
+                while possibleSquares==[]:
+                    if not s1Exhausted:
+                        if itera > 7:
+                            s1Exhausted=True
+                            itera=0
+
+                        if (itera,pieceNum-1) not in set1:
+                            possibleSquares.append([0,(itera,pieceNum-1)])
+                            break
                         
+                    else:
+                        if itera >  7:
+                            break
+                        
+                        if (itera,pieceNum-1) not in set2:
+                            possibleSquares.append([1,(itera,pieceNum-1)])
+                            break
+
+                    itera+=1
+        
+            currentPos=pieceActivated[0].grid_info()
+            currentPos=(currentPos["row"],currentPos["column"])
+
+            if not pieceActivated[1].stillInDeck:
+                for item in possibleSquares:
+                    if item[1] == currentPos:
+                        possibleSquares.remove(item)
+
+                for item in self.cardsOnBoard:
+                    if item[0:2] in possibleSquares:
+                        possibleSquares.remove(item)
 
             for item in possibleSquares:
                 parent=self.set1
@@ -459,8 +480,18 @@ class Game():
             threads.append(t)
             t.start()
 
+        self.checkForInvalidSquares()
+
         return label
         
+
+    def checkForInvalidSquares(self):
+        positions=[[x[0],x[1]] for x in self.cardsOnBoard]
+        print(positions)
+        for piece in self.cardsOnBoard:
+            pos=[piece[0],piece[1]]
+            obj=piece[2]
+        pass
 
     def drawHand(self):
         """ Draws a players hand from the draw pile """
@@ -501,8 +532,6 @@ class Game():
         deck.append(Piece(None,None,id_+1,wildcard=True))
         
         return deck  
-
-
 
 player1=Player()
 player2=Player()
